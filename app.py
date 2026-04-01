@@ -21,6 +21,57 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+
+    .main-title {
+        font-family: 'Inter', sans-serif;
+        font-size: 2.6rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        color: #0f172a;
+        margin-bottom: 0.2rem;
+    }
+
+    .sub-description {
+        font-size: 0.9rem;
+        font-style: italic;
+        color: #64748b;
+        margin-bottom: 1.5rem;
+    }
+
+    .upload-label {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #6366f1;
+        margin-bottom: 0.4rem;
+    }
+
+    .stButton > button {
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        border-radius: 8px;
+    }
+
+    section[data-testid="stFileUploader"] {
+        border: 2px dashed #6366f1;
+        border-radius: 12px;
+        padding: 1rem;
+        background-color: #f8f7ff;
+    }
+
+    .stProgress > div > div {
+        background-color: #6366f1;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ─────────────────────────────────────────────
 # Sidebar – configuration
 # ─────────────────────────────────────────────
@@ -38,17 +89,21 @@ with st.sidebar:
 
     whisper_model_size = st.selectbox(
         "Whisper model",
-        options=["tiny", "base", "small", "medium"],
+        options=["tiny", "base"],
         index=1,
-        help="Larger models are more accurate but slower.",
+        help="'base' is more accurate; 'tiny' is faster.",
     )
 
-    anthropic_api_key = st.text_input(
-        "Anthropic API Key",
-        type="password",
-        value=os.getenv("ANTHROPIC_API_KEY", ""),
-        help="Required to call Claude for segment selection.",
-    )
+    _env_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if _env_key:
+        anthropic_api_key = _env_key
+        st.caption("Anthropic API Key: configured via environment.")
+    else:
+        anthropic_api_key = st.text_input(
+            "Anthropic API Key",
+            type="password",
+            help="Required to call Claude for segment selection.",
+        )
 
     st.markdown("---")
     st.caption("SumVid.ai · Long-to-Short Video Summariser")
@@ -56,16 +111,18 @@ with st.sidebar:
 # ─────────────────────────────────────────────
 # Header
 # ─────────────────────────────────────────────
-st.title("🎬 SumVid.ai — Long-to-Short Video Summariser")
+st.markdown('<p class="main-title">🎬 SumVid.ai — Long-to-Short Video Summariser</p>', unsafe_allow_html=True)
 st.markdown(
-    "Upload a long MP4 (up to 60 minutes) and receive a concise highlight reel "
-    "that preserves the narrative arc: **Beginning → Middle → End**."
+    '<p class="sub-description">Upload a long MP4 (up to 60 minutes) and receive a concise highlight reel '
+    'that preserves the narrative arc: Beginning → Middle → End.</p>',
+    unsafe_allow_html=True,
 )
 
+st.markdown('<p class="upload-label">Upload your video file</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader(
-    "Upload your MP4 file",
+    label="",
     type=["mp4", "mov", "mkv", "avi"],
-    help="Files up to several GB are supported. Processing time scales with video length.",
+    help="Supported: MP4, MOV, MKV, AVI. Processing time scales with video length.",
 )
 
 
