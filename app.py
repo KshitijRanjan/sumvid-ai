@@ -29,6 +29,19 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
+    /* Force white background on main content area only */
+    .stApp {
+        background-color: #ffffff;
+    }
+    section.main > div {
+        background-color: #ffffff;
+    }
+
+    /* Default text colour for main area */
+    .stApp, .stApp p, .stApp label, .stApp div {
+        color: #1e293b;
+    }
+
     .main-title {
         font-family: 'Inter', sans-serif;
         font-size: 2.6rem;
