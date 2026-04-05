@@ -1,3 +1,14 @@
+---
+title: SumVid.ai
+emoji: 🎬
+colorFrom: indigo
+colorTo: purple
+sdk: streamlit
+sdk_version: 1.35.0
+app_file: app.py
+pinned: false
+---
+
 # SumVid.ai — Long-to-Short Video Summariser
 
 Converts a 60-minute MP4 into a 4-minute highlight reel using:
