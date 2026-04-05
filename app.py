@@ -432,13 +432,13 @@ if uploaded_file is not None:
         # Persistent temp dir for the session (cleaned up on exit)
         with tempfile.TemporaryDirectory(prefix="sumvid_") as tmp_dir:
 
-            video_path       = os.path.join(tmp_dir, "input.mp4")
+            original_path    = os.path.join(tmp_dir, "input.mp4")
             compressed_path  = os.path.join(tmp_dir, "input_compressed.mp4")
             audio_path       = os.path.join(tmp_dir, "audio.wav")
             output_path      = os.path.join(tmp_dir, "summary.mp4")
 
             # ── Save uploaded file (chunked to avoid RAM spike) ────
-            with open(video_path, "wb") as f:
+            with open(original_path, "wb") as f:
                 CHUNK = 8 * 1024 * 1024  # 8 MB chunks
                 while True:
                     chunk = uploaded_file.read(CHUNK)
@@ -447,8 +447,11 @@ if uploaded_file is not None:
                     f.write(chunk)
 
             # ── Compress if file exceeds 200 MB ───────────────────
+            # Compressed copy is used only for audio extraction + Whisper.
+            # Final video cut always uses the original for full quality.
             SIZE_THRESHOLD_MB = 200
-            file_size_mb = os.path.getsize(video_path) / 1_048_576
+            file_size_mb = os.path.getsize(original_path) / 1_048_576
+            processing_path = original_path  # file used for audio/transcription
             if file_size_mb > SIZE_THRESHOLD_MB:
                 st.markdown("### Pre-processing — Video Compression")
                 bar0 = st.progress(0.0)
@@ -459,8 +462,8 @@ if uploaded_file is not None:
                     status0.caption(msg)
 
                 try:
-                    compress_video(video_path, compressed_path, cb0)
-                    video_path = compressed_path  # use compressed file for all stages
+                    compress_video(original_path, compressed_path, cb0)
+                    processing_path = compressed_path  # use compressed for Whisper only
                 except RuntimeError as e:
                     st.error(str(e))
                     st.stop()
@@ -475,10 +478,14 @@ if uploaded_file is not None:
                 status1.caption(msg)
 
             try:
-                extract_audio(video_path, audio_path, cb1)
+                extract_audio(processing_path, audio_path, cb1)
             except RuntimeError as e:
                 st.error(str(e))
                 st.stop()
+            finally:
+                # Compressed copy is no longer needed — free disk space before Whisper
+                if processing_path == compressed_path and os.path.exists(compressed_path):
+                    os.remove(compressed_path)
 
             # ── Stage 2: Transcription ─────────────────────
             st.markdown("### Stage 2 — Transcription")
@@ -494,6 +501,10 @@ if uploaded_file is not None:
             except Exception as e:
                 st.error(f"Transcription error: {e}")
                 st.stop()
+            finally:
+                # WAV is no longer needed — free disk space before assembly
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
 
             with st.expander("📄 View raw transcript segments"):
                 st.json(segments[:20])
@@ -541,7 +552,7 @@ if uploaded_file is not None:
                 status4.caption(msg)
 
             try:
-                build_highlight_reel(video_path, selected_segments, output_path, cb4)
+                build_highlight_reel(original_path, selected_segments, output_path, cb4)
             except RuntimeError as e:
                 st.error(str(e))
                 st.stop()
@@ -553,9 +564,8 @@ if uploaded_file is not None:
             size_mb = os.path.getsize(output_path) / 1_048_576
             base_name = Path(uploaded_file.name).stem
 
-            # Stream output file directly — never load full video into RAM
             with open(output_path, "rb") as f:
-                st.video(f.read(min(50 * 1024 * 1024, os.path.getsize(output_path))))
+                st.video(f.read())
 
             with open(output_path, "rb") as f:
                 st.download_button(
