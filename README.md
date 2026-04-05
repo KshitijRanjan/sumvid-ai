@@ -3,9 +3,8 @@ title: SumVid.ai
 emoji: 🎬
 colorFrom: indigo
 colorTo: purple
-sdk: streamlit
-sdk_version: 1.35.0
-app_file: app.py
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
