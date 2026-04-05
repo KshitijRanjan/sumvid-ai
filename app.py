@@ -2,6 +2,7 @@ import os
 import json
 import tempfile
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -287,18 +288,47 @@ def extract_audio(video_path: str, audio_path: str, progress_cb) -> None:
 
 def transcribe_audio(audio_path: str, model_size: str, progress_cb) -> list[dict]:
     """
-    Run Whisper and return a list of segment dicts:
-      {"text": str, "start": float, "end": float}
+    Run Whisper in a background thread so the main thread can update the
+    progress bar every few seconds. Progress is estimated from elapsed time
+    vs expected duration (Whisper base ≈ 8–12x slower than realtime on CPU).
     """
+    audio_duration = get_video_duration(audio_path)
+    # Conservative estimate for shared CPU: base ~10x slower than realtime
+    estimated_secs = max(audio_duration * 10, 30)
+
     progress_cb(0.05, f"Loading Whisper '{model_size}' model…")
     model = whisper.load_model(model_size)
-    progress_cb(0.2, "Transcribing – this may take a few minutes…")
-    result = model.transcribe(audio_path, verbose=False)
+    progress_cb(0.12, f"Transcribing {audio_duration:.0f}s of audio — est. {estimated_secs / 60:.0f} min. Please wait…")
+
+    result_holder: list = [None]
+    error_holder: list = [None]
+    done = threading.Event()
+
+    def _run():
+        try:
+            result_holder[0] = model.transcribe(audio_path, verbose=False)
+        except Exception as exc:
+            error_holder[0] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    start = time.time()
+    while not done.wait(timeout=3):
+        elapsed = time.time() - start
+        frac = min(0.12 + 0.83 * (elapsed / estimated_secs), 0.95)
+        m, s = divmod(int(elapsed), 60)
+        progress_cb(frac, f"Transcribing… {m:02d}:{s:02d} elapsed")
+
+    if error_holder[0]:
+        raise error_holder[0]
+
     segments = [
         {"text": seg["text"].strip(), "start": round(seg["start"], 2), "end": round(seg["end"], 2)}
-        for seg in result["segments"]
+        for seg in result_holder[0]["segments"]
     ]
-    progress_cb(1.0, f"Transcription complete – {len(segments)} segments found.")
+    progress_cb(1.0, f"Transcription complete — {len(segments)} segments found.")
     return segments
 
 
