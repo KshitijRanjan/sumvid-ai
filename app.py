@@ -133,7 +133,8 @@ st.markdown(
 
 st.markdown('<p class="upload-label">Upload your video file</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader(
-    label="",
+    label="Upload your video file",
+    label_visibility="collapsed",
     type=["mp4", "mov", "mkv", "avi"],
     help="Supported: MP4, MOV, MKV, AVI. Processing time scales with video length.",
 )
