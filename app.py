@@ -43,12 +43,12 @@ st.markdown("""
         color: #1e293b;
     }
 
-    /* Remove Streamlit's default top padding */
+    /* Reduce Streamlit's default top padding to bring title closer to top */
     .block-container {
-        padding-top: 0.5rem !important;
+        padding-top: 2rem !important;
     }
 
-    .main-title {
+.main-title {
         font-family: 'Inter', sans-serif;
         font-size: 3.2rem;
         font-weight: 800;
