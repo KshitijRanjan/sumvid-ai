@@ -43,33 +43,39 @@ st.markdown("""
         color: #1e293b;
     }
 
+    /* ── Sticky header ── */
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background: #ffffff;
+        padding: 0.9rem 0 0.6rem 0;
+        border-bottom: 1px solid #f1f5f9;
+        margin-bottom: 1.5rem;
+    }
+
     .main-title {
         font-family: 'Inter', sans-serif;
         font-size: 3.2rem;
         font-weight: 800;
         letter-spacing: -1px;
         color: #0f172a;
-        margin-top: 1.5rem;
-        margin-bottom: 0.3rem;
+        margin: 0 0 0.2rem 0;
     }
 
     .sub-description {
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         font-style: italic;
         color: #64748b;
-        margin-bottom: 2rem;
+        margin: 0;
     }
 
     .upload-label {
         font-family: 'Inter', sans-serif;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 600;
         color: #6366f1;
-        margin-bottom: 0.4rem;
-    }
-
-    .section-gap {
-        margin-top: 2rem;
+        margin-bottom: 0.3rem;
     }
 
     .stButton > button {
@@ -78,11 +84,37 @@ st.markdown("""
         border-radius: 8px;
     }
 
-    section[data-testid="stFileUploader"] {
-        border: 2px dashed #6366f1;
-        border-radius: 12px;
-        padding: 1rem;
-        background-color: #f8f7ff;
+    /* Pastel blue Generate button */
+    button[data-testid="baseButton-primary"] {
+        background-color: #5b9cf5 !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-size: 1.05rem !important;
+        border-radius: 10px !important;
+    }
+    button[data-testid="baseButton-primary"]:hover {
+        background-color: #3b82f6 !important;
+    }
+
+    /* Compact file uploader — hide drag-drop text, keep button */
+    [data-testid="stFileUploaderDropzone"] {
+        border: 1.5px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 10px 16px !important;
+        background: #fafafa !important;
+    }
+    [data-testid="stFileUploaderDropzone"] span:not(:last-child),
+    [data-testid="stFileUploaderDropzone"] small {
+        display: none !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: #6366f1 !important;
+        color: white !important;
+        border-radius: 20px !important;
+        border: none !important;
+        padding: 5px 18px !important;
+        font-size: 0.83rem !important;
+        font-weight: 500 !important;
     }
 
     .stProgress > div > div {
@@ -187,23 +219,14 @@ with st.sidebar:
     st.caption("SumVid.ai · Long-to-Short Video Summariser")
 
 # ─────────────────────────────────────────────
-# Header
+# Sticky header
 # ─────────────────────────────────────────────
-st.markdown('<p class="main-title">🎬 SumVid.ai — Long-to-Short Video Summariser</p>', unsafe_allow_html=True)
-st.markdown(
-    '<p class="sub-description">Upload a long MP4 (up to 60 minutes) and receive a concise highlight reel '
-    'that preserves the narrative arc: Beginning → Middle → End.</p>',
-    unsafe_allow_html=True,
-)
-
-st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
-st.markdown('<p class="upload-label">Upload your video file</p>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader(
-    label="Upload your video file",
-    label_visibility="collapsed",
-    type=["mp4", "mov", "mkv", "avi"],
-    help="Supported: MP4, MOV, MKV, AVI. Processing time scales with video length.",
-)
+st.markdown("""
+<div class="sticky-header">
+    <p class="main-title">🎬 SumVid.ai — Long-to-Short Video Summariser</p>
+    <p class="sub-description">Upload a long MP4 and receive a concise highlight reel that preserves the narrative arc: Beginning → Middle → End.</p>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
@@ -576,50 +599,32 @@ if "user_instruction" not in st.session_state:
     st.session_state.user_instruction = ""
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
+if "ready_to_generate" not in st.session_state:
+    st.session_state.ready_to_generate = False
 
 # ─────────────────────────────────────────────
-# Chat — customise the highlight reel
+# Phase 1 — Upload
 # ─────────────────────────────────────────────
-st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
-st.markdown('<p class="upload-label">💬 What should the highlight reel focus on?</p>', unsafe_allow_html=True)
-st.markdown(
-    '<p class="chat-sublabel">Optionally tell Claude what to prioritise — or leave blank for the default narrative selection.</p>',
-    unsafe_allow_html=True,
+with st.chat_message("assistant"):
+    st.markdown("**Upload your video to get started.** I'll transcribe it and create a highlight reel.")
+
+uploaded_file = st.file_uploader(
+    label="📎 Attach video",
+    label_visibility="collapsed",
+    type=["mp4", "mov", "mkv", "avi"],
+    help="Supported: MP4, MOV, MKV, AVI.",
 )
 
-with st.container():
-    for msg in st.session_state.chat_messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    if st.session_state.user_instruction:
-        if st.button("✕ Clear instruction", type="secondary"):
-            st.session_state.user_instruction = ""
-            st.session_state.chat_messages = []
-            st.rerun()
-
-if prompt := st.chat_input("e.g. 'Focus on the Q&A section', 'Skip the intro', 'Keep moments about pricing'…"):
-    st.session_state.chat_messages = [
-        {"role": "user", "content": prompt},
-        {"role": "assistant", "content": f"Got it! I'll prioritise: **{prompt}**"},
-    ]
-    st.session_state.user_instruction = prompt
-    st.rerun()
-
-st.markdown("---")
-
 # ─────────────────────────────────────────────
-# Main pipeline
+# Phase 2 — Instruction (shown after upload)
 # ─────────────────────────────────────────────
-
 if uploaded_file is not None:
 
     if not check_ffmpeg():
         st.error(
-            "❌ **FFmpeg not found.** Please install FFmpeg and ensure it is on your PATH.\n\n"
+            "❌ **FFmpeg not found.**\n\n"
             "- macOS: `brew install ffmpeg`\n"
-            "- Ubuntu: `sudo apt install ffmpeg`\n"
-            "- Windows: https://ffmpeg.org/download.html"
+            "- Ubuntu: `sudo apt install ffmpeg`"
         )
         st.stop()
 
@@ -627,9 +632,53 @@ if uploaded_file is not None:
         st.warning("⚠️ Please enter your **Anthropic API Key** in the sidebar to proceed.")
         st.stop()
 
-    st.success(f"✅ Uploaded: **{uploaded_file.name}** ({uploaded_file.size / 1_048_576:.1f} MB)")
+    with st.chat_message("user"):
+        st.markdown(f"📎 **{uploaded_file.name}** · {uploaded_file.size / 1_048_576:.1f} MB ✅")
 
-    if st.button("🚀 Generate Highlight Reel", type="primary", use_container_width=True):
+    with st.chat_message("assistant"):
+        st.markdown(
+            "**What should the highlight reel focus on?** *(optional)*\n\n"
+            "Describe what to prioritise — e.g. *'Focus on the Q&A'*, *'Skip the intro'*. "
+            "Or press **Enter** to skip and use the default narrative selection."
+        )
+
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if not st.session_state.ready_to_generate:
+        if st.button("Skip →  Generate with default settings", type="secondary"):
+            st.session_state.ready_to_generate = True
+            st.rerun()
+    elif st.session_state.user_instruction:
+        if st.button("✕ Clear instruction", type="secondary"):
+            st.session_state.user_instruction = ""
+            st.session_state.chat_messages = []
+            st.session_state.ready_to_generate = False
+            st.rerun()
+
+# ─────────────────────────────────────────────
+# Chat input — disabled until file uploaded
+# ─────────────────────────────────────────────
+if uploaded_file is None:
+    st.chat_input("Upload your video above to continue…", disabled=True)
+elif not st.session_state.ready_to_generate:
+    if prompt := st.chat_input("What should the highlight reel focus on?"):
+        if prompt.strip():
+            st.session_state.chat_messages = [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": f"Got it! I'll prioritise: **{prompt}**"},
+            ]
+            st.session_state.user_instruction = prompt
+        st.session_state.ready_to_generate = True
+        st.rerun()
+
+# ─────────────────────────────────────────────
+# Phase 3 — Generate (shown after instruction step)
+# ─────────────────────────────────────────────
+if uploaded_file is not None and st.session_state.ready_to_generate:
+
+    if st.button("🎬 Generate Highlight Reel", type="primary", use_container_width=True):
 
         # Persistent temp dir for the session (cleaned up on exit)
         with tempfile.TemporaryDirectory(prefix="sumvid_") as tmp_dir:
