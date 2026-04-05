@@ -158,6 +158,30 @@ def check_ffmpeg() -> bool:
         return False
 
 
+def compress_video(input_path: str, output_path: str, progress_cb) -> None:
+    """
+    Transcode video to 480p, 800kbps video + 64kbps audio.
+    Reduces a 600MB file to ~50-80MB without affecting Whisper accuracy.
+    """
+    progress_cb(0.1, "Compressing video to reduce memory usage…")
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_path,
+        "-vf", "scale=-2:480",
+        "-c:v", "libx264",
+        "-b:v", "800k",
+        "-c:a", "aac",
+        "-b:a", "64k",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Video compression failed:\n{result.stderr}")
+    compressed_mb = os.path.getsize(output_path) / 1_048_576
+    progress_cb(1.0, f"Compressed to {compressed_mb:.0f} MB.")
+
+
 def extract_audio(video_path: str, audio_path: str, progress_cb) -> None:
     """Extract mono 16 kHz WAV from video using FFmpeg."""
     progress_cb(0.1, "Extracting audio track…")
@@ -408,9 +432,10 @@ if uploaded_file is not None:
         # Persistent temp dir for the session (cleaned up on exit)
         with tempfile.TemporaryDirectory(prefix="sumvid_") as tmp_dir:
 
-            video_path  = os.path.join(tmp_dir, "input.mp4")
-            audio_path  = os.path.join(tmp_dir, "audio.wav")
-            output_path = os.path.join(tmp_dir, "summary.mp4")
+            video_path       = os.path.join(tmp_dir, "input.mp4")
+            compressed_path  = os.path.join(tmp_dir, "input_compressed.mp4")
+            audio_path       = os.path.join(tmp_dir, "audio.wav")
+            output_path      = os.path.join(tmp_dir, "summary.mp4")
 
             # ── Save uploaded file (chunked to avoid RAM spike) ────
             with open(video_path, "wb") as f:
@@ -420,6 +445,25 @@ if uploaded_file is not None:
                     if not chunk:
                         break
                     f.write(chunk)
+
+            # ── Compress if file exceeds 200 MB ───────────────────
+            SIZE_THRESHOLD_MB = 200
+            file_size_mb = os.path.getsize(video_path) / 1_048_576
+            if file_size_mb > SIZE_THRESHOLD_MB:
+                st.markdown("### Pre-processing — Video Compression")
+                bar0 = st.progress(0.0)
+                status0 = st.empty()
+
+                def cb0(frac, msg):
+                    bar0.progress(min(frac, 1.0))
+                    status0.caption(msg)
+
+                try:
+                    compress_video(video_path, compressed_path, cb0)
+                    video_path = compressed_path  # use compressed file for all stages
+                except RuntimeError as e:
+                    st.error(str(e))
+                    st.stop()
 
             # ── Stage 1: Audio Extraction ──────────────────
             st.markdown("### Stage 1 — Audio Extraction")
