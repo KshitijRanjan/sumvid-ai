@@ -205,12 +205,31 @@ def check_ffmpeg() -> bool:
         return False
 
 
+def get_video_duration(video_path: str) -> float:
+    """Return video duration in seconds using ffprobe, or 0 if unavailable."""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path,
+        ],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
 def compress_video(input_path: str, output_path: str, progress_cb) -> None:
     """
     Transcode video to 480p, 800kbps video + 64kbps audio.
-    Reduces a 600MB file to ~50-80MB without affecting Whisper accuracy.
+    Streams FFmpeg progress so the UI bar updates in real time.
     """
-    progress_cb(0.1, "Compressing video to reduce memory usage…")
+    total_duration = get_video_duration(input_path)
+    progress_cb(0.02, "Starting compression…")
+
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
@@ -220,11 +239,30 @@ def compress_video(input_path: str, output_path: str, progress_cb) -> None:
         "-c:a", "aac",
         "-b:a", "64k",
         "-movflags", "+faststart",
+        "-progress", "pipe:1",  # stream structured progress to stdout
+        "-nostats",
         output_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"Video compression failed:\n{result.stderr}")
+
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in process.stdout:
+        line = line.strip()
+        if line.startswith("out_time_ms="):
+            try:
+                elapsed_s = int(line.split("=")[1]) / 1_000_000
+                if total_duration > 0:
+                    frac = min(0.05 + 0.93 * (elapsed_s / total_duration), 0.98)
+                    progress_cb(frac, f"Compressing… {elapsed_s:.0f}s / {total_duration:.0f}s")
+            except (ValueError, IndexError):
+                pass
+
+    process.wait()
+
+    if process.returncode != 0:
+        stderr = process.stderr.read()
+        raise RuntimeError(f"Video compression failed:\n{stderr}")
+
     compressed_mb = os.path.getsize(output_path) / 1_048_576
     progress_cb(1.0, f"Compressed to {compressed_mb:.0f} MB.")
 
