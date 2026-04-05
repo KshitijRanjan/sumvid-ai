@@ -6,6 +6,8 @@ colorTo: purple
 sdk: docker
 app_port: 7860
 pinned: false
+license: mit
+short_description: converts long mp4 to short videos using claude sonnet
 ---
 
 # SumVid.ai — Long-to-Short Video Summariser
