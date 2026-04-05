@@ -43,6 +43,11 @@ st.markdown("""
         color: #1e293b;
     }
 
+    /* Remove Streamlit's default top padding */
+    .block-container {
+        padding-top: 0.5rem !important;
+    }
+
     /* ── Sticky header ── */
     .sticky-header {
         position: sticky;
