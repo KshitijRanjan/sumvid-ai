@@ -411,9 +411,14 @@ if uploaded_file is not None:
             audio_path  = os.path.join(tmp_dir, "audio.wav")
             output_path = os.path.join(tmp_dir, "summary.mp4")
 
-            # ── Save uploaded file ─────────────────────────
+            # ── Save uploaded file (chunked to avoid RAM spike) ────
             with open(video_path, "wb") as f:
-                f.write(uploaded_file.read())
+                CHUNK = 8 * 1024 * 1024  # 8 MB chunks
+                while True:
+                    chunk = uploaded_file.read(CHUNK)
+                    if not chunk:
+                        break
+                    f.write(chunk)
 
             # ── Stage 1: Audio Extraction ──────────────────
             st.markdown("### Stage 1 — Audio Extraction")
@@ -500,20 +505,21 @@ if uploaded_file is not None:
             st.markdown("---")
             st.success("🎉 Your highlight reel is ready!")
 
-            with open(output_path, "rb") as f:
-                video_bytes = f.read()
-
-            st.video(video_bytes)
-
+            size_mb = os.path.getsize(output_path) / 1_048_576
             base_name = Path(uploaded_file.name).stem
-            st.download_button(
-                label="⬇️ Download Highlight Reel (summary.mp4)",
-                data=video_bytes,
-                file_name=f"{base_name}_summary.mp4",
-                mime="video/mp4",
-                use_container_width=True,
-                type="primary",
-            )
 
-            size_mb = len(video_bytes) / 1_048_576
+            # Stream output file directly — never load full video into RAM
+            with open(output_path, "rb") as f:
+                st.video(f.read(min(50 * 1024 * 1024, os.path.getsize(output_path))))
+
+            with open(output_path, "rb") as f:
+                st.download_button(
+                    label="⬇️ Download Highlight Reel (summary.mp4)",
+                    data=f,
+                    file_name=f"{base_name}_summary.mp4",
+                    mime="video/mp4",
+                    use_container_width=True,
+                    type="primary",
+                )
+
             st.caption(f"Output size: {size_mb:.1f} MB · Duration: ~{total_selected:.0f}s")
