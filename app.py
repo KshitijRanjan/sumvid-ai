@@ -45,18 +45,19 @@ st.markdown("""
 
     .main-title {
         font-family: 'Inter', sans-serif;
-        font-size: 2.6rem;
-        font-weight: 700;
-        letter-spacing: -0.5px;
+        font-size: 3.2rem;
+        font-weight: 800;
+        letter-spacing: -1px;
         color: #0f172a;
-        margin-bottom: 0.2rem;
+        margin-top: 1.5rem;
+        margin-bottom: 0.3rem;
     }
 
     .sub-description {
         font-size: 0.9rem;
         font-style: italic;
         color: #64748b;
-        margin-bottom: 1.5rem;
+        margin-bottom: 2rem;
     }
 
     .upload-label {
@@ -65,6 +66,10 @@ st.markdown("""
         font-weight: 600;
         color: #6366f1;
         margin-bottom: 0.4rem;
+    }
+
+    .section-gap {
+        margin-top: 2rem;
     }
 
     .stButton > button {
@@ -84,15 +89,23 @@ st.markdown("""
         background-color: #6366f1;
     }
 
-    /* Chat section */
-    .chat-container {
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 1.25rem 1.25rem 0.5rem 1.25rem;
-        background-color: #fafafa;
-        margin-bottom: 1rem;
+    /* Sidebar — smaller, tighter font */
+    [data-testid="stSidebar"] {
+        font-size: 0.82rem;
+    }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stCaption,
+    [data-testid="stSidebar"] p {
+        font-size: 0.78rem;
     }
 
+    /* Chat section */
     .chat-label {
         font-family: 'Inter', sans-serif;
         font-size: 1.1rem;
@@ -107,16 +120,11 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
-    /* Make the chat input bar look polished */
+    /* Remove border/shadow from chat input bar */
     [data-testid="stChatInput"] {
-        border-radius: 24px;
-        border: 1.5px solid #c7d2fe;
-        background: #ffffff;
-    }
-
-    [data-testid="stChatInput"]:focus-within {
-        border-color: #6366f1;
-        box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
     }
 
     /* User message bubble */
@@ -155,6 +163,15 @@ with st.sidebar:
         help="'base' is more accurate; 'tiny' is faster.",
     )
 
+    whisper_language = st.selectbox(
+        "Video language",
+        options=["Auto-detect", "English", "Hindi"],
+        index=0,
+        help="Set the spoken language to improve transcription accuracy.",
+    )
+    _lang_map = {"Auto-detect": None, "English": "en", "Hindi": "hi"}
+    whisper_language_code = _lang_map[whisper_language]
+
     _env_key = os.getenv("ANTHROPIC_API_KEY", "")
     if _env_key:
         anthropic_api_key = _env_key
@@ -179,6 +196,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 st.markdown('<p class="upload-label">Upload your video file</p>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader(
     label="Upload your video file",
@@ -286,7 +304,7 @@ def extract_audio(video_path: str, audio_path: str, progress_cb) -> None:
     progress_cb(1.0, "Audio extracted.")
 
 
-def transcribe_audio(audio_path: str, model_size: str, progress_cb) -> list[dict]:
+def transcribe_audio(audio_path: str, model_size: str, progress_cb, language: str | None = None) -> list[dict]:
     """
     Run Whisper in a background thread so the main thread can update the
     progress bar every few seconds. Progress is estimated from elapsed time
@@ -306,7 +324,7 @@ def transcribe_audio(audio_path: str, model_size: str, progress_cb) -> list[dict
 
     def _run():
         try:
-            result_holder[0] = model.transcribe(audio_path, verbose=False)
+            result_holder[0] = model.transcribe(audio_path, verbose=False, language=language)
         except Exception as exc:
             error_holder[0] = exc
         finally:
@@ -332,7 +350,7 @@ def transcribe_audio(audio_path: str, model_size: str, progress_cb) -> list[dict
     return segments
 
 
-def enforce_duration(segments: list[dict], target_secs: int, tolerance: float = 0.10) -> list[dict]:
+def enforce_duration(segments: list[dict], target_secs: int, tolerance: float = 0.50) -> list[dict]:
     """
     Greedily include segments in chronological order until the budget is used.
     Drops whole segments rather than truncating mid-segment to avoid jarring cuts.
@@ -366,8 +384,8 @@ def select_segments_with_claude(
 
     transcript_json = json.dumps(segments, indent=2)
 
-    lower = int(target_secs * 0.85)
-    upper = int(target_secs * 1.10)
+    lower = int(target_secs)
+    upper = int(target_secs * 1.50)
 
     system_prompt = (
         "You are a professional video editor with expertise in narrative storytelling. "
@@ -562,8 +580,8 @@ if "chat_messages" not in st.session_state:
 # ─────────────────────────────────────────────
 # Chat — customise the highlight reel
 # ─────────────────────────────────────────────
-st.markdown("---")
-st.markdown('<p class="chat-label">💬 What should the highlight reel focus on?</p>', unsafe_allow_html=True)
+st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+st.markdown('<p class="upload-label">💬 What should the highlight reel focus on?</p>', unsafe_allow_html=True)
 st.markdown(
     '<p class="chat-sublabel">Optionally tell Claude what to prioritise — or leave blank for the default narrative selection.</p>',
     unsafe_allow_html=True,
@@ -681,7 +699,7 @@ if uploaded_file is not None:
                 status2.caption(msg)
 
             try:
-                segments = transcribe_audio(audio_path, whisper_model_size, cb2)
+                segments = transcribe_audio(audio_path, whisper_model_size, cb2, language=whisper_language_code)
             except Exception as e:
                 st.error(f"Transcription error: {e}")
                 st.stop()
