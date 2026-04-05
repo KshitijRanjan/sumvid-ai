@@ -48,17 +48,6 @@ st.markdown("""
         padding-top: 0.5rem !important;
     }
 
-    /* ── Sticky header ── */
-    .sticky-header {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        background: #ffffff;
-        padding: 0.9rem 0 0.6rem 0;
-        border-bottom: 1px solid #f1f5f9;
-        margin-bottom: 1.5rem;
-    }
-
     .main-title {
         font-family: 'Inter', sans-serif;
         font-size: 3.2rem;
@@ -226,12 +215,8 @@ with st.sidebar:
 # ─────────────────────────────────────────────
 # Sticky header
 # ─────────────────────────────────────────────
-st.markdown("""
-<div class="sticky-header">
-    <p class="main-title">🎬 SumVid.ai — Long-to-Short Video Summariser</p>
-    <p class="sub-description">Upload a long MP4 and receive a concise highlight reel that preserves the narrative arc: Beginning → Middle → End.</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<p class="main-title">🎬 SumVid.ai — Long-to-Short Video Summariser</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-description">Upload a long MP4 and receive a concise highlight reel that preserves the narrative arc: Beginning → Middle → End.</p>', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
