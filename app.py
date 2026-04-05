@@ -45,7 +45,7 @@ st.markdown("""
 
     /* Reduce Streamlit's default top padding to bring title closer to top */
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 3.5rem !important;
     }
 
 .main-title {
