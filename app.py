@@ -82,6 +82,53 @@ st.markdown("""
     .stProgress > div > div {
         background-color: #6366f1;
     }
+
+    /* Chat section */
+    .chat-container {
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 1.25rem 1.25rem 0.5rem 1.25rem;
+        background-color: #fafafa;
+        margin-bottom: 1rem;
+    }
+
+    .chat-label {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #0f172a;
+        margin-bottom: 0.2rem;
+    }
+
+    .chat-sublabel {
+        font-size: 0.82rem;
+        color: #94a3b8;
+        margin-bottom: 1rem;
+    }
+
+    /* Make the chat input bar look polished */
+    [data-testid="stChatInput"] {
+        border-radius: 24px;
+        border: 1.5px solid #c7d2fe;
+        background: #ffffff;
+    }
+
+    [data-testid="stChatInput"]:focus-within {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+
+    /* User message bubble */
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+        background-color: #eef2ff;
+        border-radius: 12px;
+    }
+
+    /* Assistant message bubble */
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
+        background-color: #f8fafc;
+        border-radius: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -217,11 +264,29 @@ def transcribe_audio(audio_path: str, model_size: str, progress_cb) -> list[dict
     return segments
 
 
+def enforce_duration(segments: list[dict], target_secs: int, tolerance: float = 0.10) -> list[dict]:
+    """
+    Greedily include segments in chronological order until the budget is used.
+    Drops whole segments rather than truncating mid-segment to avoid jarring cuts.
+    Allows up to (target_secs * (1 + tolerance)) total duration.
+    """
+    budget = target_secs * (1 + tolerance)
+    result = []
+    running = 0.0
+    for seg in segments:
+        dur = seg["end"] - seg["start"]
+        if running + dur <= budget:
+            result.append(seg)
+            running += dur
+    return result
+
+
 def select_segments_with_claude(
     segments: list[dict],
     target_secs: int,
     api_key: str,
     progress_cb,
+    user_instructions: str = "",
 ) -> list[dict]:
     """
     Ask Claude to pick segments totalling ~target_secs seconds.
@@ -233,6 +298,9 @@ def select_segments_with_claude(
 
     transcript_json = json.dumps(segments, indent=2)
 
+    lower = int(target_secs * 0.85)
+    upper = int(target_secs * 1.10)
+
     system_prompt = (
         "You are a professional video editor with expertise in narrative storytelling. "
         "Your task is to select the most compelling segments from a video transcript to create "
@@ -240,7 +308,8 @@ def select_segments_with_claude(
     )
 
     user_prompt = f"""Below is a timestamped transcript from a video.
-Select segments that together total approximately {target_secs} seconds.
+Select segments whose TOTAL duration is strictly between {lower}s and {upper}s (target: {target_secs}s).
+Track your running total as you select each segment. Stop adding segments once the total is within 20s of {target_secs}s. Do not exceed {upper}s.
 
 CRITICAL RULES:
 1. The selected segments MUST maintain a logical narrative arc:
@@ -251,7 +320,15 @@ CRITICAL RULES:
 3. Avoid filler, repetition, or tangential discussions.
 4. Each selected segment should be between 10 and 90 seconds long for smooth viewing.
 5. Keep segments in chronological order.
+"""
 
+    if user_instructions.strip():
+        user_prompt += f"""
+USER INSTRUCTIONS — these take priority over the general rules above:
+{user_instructions.strip()}
+"""
+
+    user_prompt += f"""
 Respond ONLY with a valid JSON array (no markdown, no explanation) in this exact format:
 [
   {{"start": 0.0, "end": 45.2}},
@@ -407,6 +484,45 @@ def format_segments_table(segments: list[dict]) -> list[dict]:
 
 
 # ─────────────────────────────────────────────
+# Session state
+# ─────────────────────────────────────────────
+if "user_instruction" not in st.session_state:
+    st.session_state.user_instruction = ""
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+
+# ─────────────────────────────────────────────
+# Chat — customise the highlight reel
+# ─────────────────────────────────────────────
+st.markdown("---")
+st.markdown('<p class="chat-label">💬 What should the highlight reel focus on?</p>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="chat-sublabel">Optionally tell Claude what to prioritise — or leave blank for the default narrative selection.</p>',
+    unsafe_allow_html=True,
+)
+
+with st.container():
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if st.session_state.user_instruction:
+        if st.button("✕ Clear instruction", type="secondary"):
+            st.session_state.user_instruction = ""
+            st.session_state.chat_messages = []
+            st.rerun()
+
+if prompt := st.chat_input("e.g. 'Focus on the Q&A section', 'Skip the intro', 'Keep moments about pricing'…"):
+    st.session_state.chat_messages = [
+        {"role": "user", "content": prompt},
+        {"role": "assistant", "content": f"Got it! I'll prioritise: **{prompt}**"},
+    ]
+    st.session_state.user_instruction = prompt
+    st.rerun()
+
+st.markdown("---")
+
+# ─────────────────────────────────────────────
 # Main pipeline
 # ─────────────────────────────────────────────
 
@@ -522,7 +638,8 @@ if uploaded_file is not None:
 
             try:
                 selected_segments = select_segments_with_claude(
-                    segments, target_duration, anthropic_api_key, cb3
+                    segments, target_duration, anthropic_api_key, cb3,
+                    user_instructions=st.session_state.user_instruction,
                 )
             except json.JSONDecodeError as e:
                 st.error(f"Claude returned invalid JSON: {e}")
@@ -533,6 +650,9 @@ if uploaded_file is not None:
             except Exception as e:
                 st.error(f"Claude API error: {e}")
                 st.stop()
+
+            # Enforce duration hard cap in code — Claude's selection is a best-effort estimate
+            selected_segments = enforce_duration(selected_segments, target_duration)
 
             total_selected = sum(s["end"] - s["start"] for s in selected_segments)
             st.markdown(
