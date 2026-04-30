@@ -90,16 +90,12 @@ st.markdown("""
         background-color: #3b82f6 !important;
     }
 
-    /* Compact file uploader — hide drag-drop text, keep button */
+    /* Compact file uploader */
     [data-testid="stFileUploaderDropzone"] {
         border: 1.5px solid #e2e8f0 !important;
         border-radius: 12px !important;
         padding: 10px 16px !important;
         background: #fafafa !important;
-    }
-    [data-testid="stFileUploaderDropzone"] span:not(:last-child),
-    [data-testid="stFileUploaderDropzone"] small {
-        display: none !important;
     }
     [data-testid="stFileUploaderDropzone"] button {
         background: #6366f1 !important;
